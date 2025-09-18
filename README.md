@@ -107,3 +107,9 @@ src/
 ├─ App.js / App.css             # App shell & loader
 ├─ index.js / index.css         # Entry & global styles
 ```
+
+## Screenshot
+
+```
+<img width="1919" height="907" alt="image" src="https://github.com/user-attachments/assets/9ae5959f-f789-4b8f-a51f-aeed5333ab3b" />
+
