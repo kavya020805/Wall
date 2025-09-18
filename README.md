@@ -1,30 +1,39 @@
-# Global Collaborative Scribble Board
+# Global Scribble Board (Realtime Collaborative Wall)
 
-A real-time collaborative drawing application where multiple users can draw together on a shared canvas. Built with React and Firebase.
+A polished, real-time collaborative drawing app where people around the world can sketch together on a shared canvas. Built with React and Firebase, featuring modern UI, OAuth login, live cursors, and playful emoji avatars.
 
-## Features
+## Highlights
 
-- **Real-time Collaboration**: Draw together with multiple users simultaneously
-- **Live Cursor Tracking**: See other users' cursors as they move around the canvas
-- **User Presence**: View who's currently online and drawing
-- **Auto-cleanup**: User drawings are automatically removed when they leave
-- **Simplified Interface**: Fixed black brush with no toolbar - just start drawing
-- **Responsive Design**: Works on desktop and mobile devices
+- **Google & Apple Login**: One-click sign-in via secure OAuth popups
+- **Realtime Canvas**: Firebase Realtime Database sync for low-latency drawing
+- **Live Cursors**: See where others are pointing in real-time
+- **Online Presence**: Know who’s currently connected
+- **Emoji Avatars (Animals)**: Fun, square avatars generated from animal emojis that change on each refresh
+- **Performance Optimizations**: Throttled cursor updates, sampled stroke points, and requestAnimationFrame batched redraws
+- **Responsive, Modern UI**: Cohesive gradient header, clean sidebar cards, and refined login screen
 
 ## Tech Stack
 
-- **Frontend**: React.js
-- **Backend**: Firebase (Authentication + Realtime Database)
-- **Styling**: CSS3 with modern design
-- **Real-time Sync**: Firebase Realtime Database listeners
+- **Frontend**: React 18
+- **Auth**: Firebase Authentication (Email/Password, Google, Apple)
+- **Realtime**: Firebase Realtime Database
+- **Styling**: CSS (handcrafted, responsive)
 
-## Setup Instructions
+## Getting Started
 
-### 1. Firebase Configuration
+### 1) Firebase Setup
 
-1. Create a new Firebase project at [Firebase Console](https://console.firebase.google.com/)
-2. Enable Authentication with Email/Password provider
-3. Create a Realtime Database with the following rules:
+1. Create a Firebase project: `console.firebase.google.com`
+2. In Authentication → Sign-in method, enable:
+   - Email/Password
+   - Google
+   - Apple (see Apple notes below)
+3. In Authentication → Settings → Authorized domains, add your dev and hosted domains:
+   - `localhost`
+   - `127.0.0.1`
+   - Your Firebase Hosting domains (e.g., `your-project.web.app`, `your-project.firebaseapp.com`)
+   - Any custom dev host you use (e.g., LAN IP)
+4. Create a Realtime Database and use locked-down rules (example):
 
 ```json
 {
@@ -47,123 +56,78 @@ A real-time collaborative drawing application where multiple users can draw toge
 }
 ```
 
-### 2. Update Firebase Config
+### 2) Add Config
 
-Replace the placeholder configuration in `src/firebase.js` with your actual Firebase project details:
+Update `src/firebase.js` with your project’s configuration (apiKey, authDomain, etc.). The app already initializes `Auth` and `Database`, and exports OAuth providers for Google and Apple.
 
-```javascript
-const firebaseConfig = {
-  apiKey: "your-actual-api-key",
-  authDomain: "your-project.firebaseapp.com",
-  databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "your-sender-id",
-  appId: "your-app-id"
-};
-```
-
-### 3. Install Dependencies
+### 3) Install & Run
 
 ```bash
 npm install
-```
-
-### 4. Start Development Server
-
-```bash
 npm start
 ```
 
-The application will open at `http://localhost:3000`
+The app runs at `http://localhost:3000`.
+
+## Apple Sign‑in Notes
+
+Apple requires additional configuration in the Apple Developer portal.
+- In Firebase Console → Authentication → Sign-in method → Apple:
+  - Configure a Services ID, Team ID, Key ID, and private key.
+  - Add your redirect URLs per Firebase instructions.
+- Local development popups may be blocked if configuration is incomplete.
 
 ## How It Works
 
-### Authentication Flow
-1. Users sign up/login with email and password
-2. Upon successful authentication, they're redirected to the canvas
-3. User presence is tracked in the Realtime Database
+### Auth Flow
+- Users sign in with Email/Password, Google, or Apple
+- Session is observed via `onAuthStateChanged`
+- After sign-in, users land on the canvas
 
-### Drawing System
-1. **Fixed Brush**: Single black brush with preset size (3px)
-2. **Real-time Sync**: All strokes are immediately broadcast to other users
-3. **Stroke Management**: Each stroke is associated with a user ID
-4. **Auto-cleanup**: When a user disconnects, their strokes are automatically removed
+### Realtime Drawing
+- Brush: fixed black stroke with width 3
+- Points are saved as stroke arrays under each user in Realtime Database
+- Other clients listen and redraw strokes as they arrive
 
-### User Presence
-1. **Online Tracking**: Users are marked as online when they join
-2. **Cursor Tracking**: Mouse movements are broadcast to show live cursors
-3. **Disconnect Handling**: Users are automatically removed when they leave
+### Presence & Cursors
+- Presence is written to `onlineUsers` and cleaned up on disconnect
+- Cursors are updated at ~30 FPS to reduce writes
+- Cursor labels show the user’s email
+
+### Emoji Avatars (Animals)
+- Avatars in the sidebar are generated from a curated set of animal Twemoji PNGs
+- A session-specific seed is created on each refresh, so the avatar changes every time
+- Images are square (32×32) for full visibility
+
+## Performance Optimizations
+- **Cursor Throttle (~30fps)**: Cuts write frequency for smoother performance
+- **Point Sampling**: Skips sub-2px movements to reduce point density and draw cost
+- **rAF Redraws**: Full-canvas redraws are batched using `requestAnimationFrame`
 
 ## Project Structure
 
 ```
 src/
-├── components/
-│   ├── Login.js          # Authentication component
-│   ├── Login.css         # Login styles
-│   ├── Canvas.js         # Main drawing canvas
-│   └── Canvas.css        # Canvas styles
-├── firebase.js           # Firebase configuration
-├── App.js               # Main app component
-├── App.css              # App styles
-├── index.js             # Entry point
-└── index.css            # Global styles
+├─ components/
+│  ├─ Login.js / Login.css     # Auth UI with Google & Apple buttons
+│  ├─ Canvas.js / Canvas.css   # Canvas, presence, cursors, avatars, UI
+├─ firebase.js                  # Firebase app, Auth, DB, OAuth providers
+├─ App.js / App.css             # App shell & loader
+├─ index.js / index.css         # Entry & global styles
 ```
 
-## Key Features Explained
-
-### Simplified Interface
-- No toolbar or tool selection
-- Fixed black brush only
-- No eraser or undo functionality
-- Clean, distraction-free drawing experience
-
-### Real-time Collaboration
-- Firebase Realtime Database for instant stroke synchronization
-- WebSocket-like behavior through Firebase listeners
-- Smooth drawing experience with minimal lag
-
-### User Management
-- Email-based authentication
-- Automatic user presence tracking
-- Clean disconnect handling with stroke removal
-
-### Responsive Design
-- Works on desktop and mobile devices
-- Adaptive layout for different screen sizes
-- Touch-friendly interface
-
-## Deployment
-
-### Build for Production
+## Deploy
 
 ```bash
 npm run build
 ```
 
-### Deploy to Firebase Hosting
-
-1. Install Firebase CLI: `npm install -g firebase-tools`
-2. Login: `firebase login`
-3. Initialize: `firebase init hosting`
-4. Deploy: `firebase deploy`
-
-## Browser Support
-
-- Chrome (recommended)
-- Firefox
-- Safari
-- Edge
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+Host on Firebase (optional):
+1. `npm i -g firebase-tools`
+2. `firebase login`
+3. `firebase init hosting`
+4. `firebase deploy`
 
 ## License
 
-This project is open source and available under the MIT License.
+MIT

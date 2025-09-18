@@ -3,6 +3,55 @@ import { ref, onValue, push, remove, set, onDisconnect } from 'firebase/database
 import { database, auth } from '../firebase';
 import './Canvas.css';
 
+// Choose an animal emoji from a curated list and return the Twemoji PNG URL
+const animalCodepoints = [
+  '1f431', // 🐱 cat face
+  '1f436', // 🐶 dog face
+  '1f981', // 🦁 lion face
+  '1f42f', // 🐯 tiger face
+  '1f43a', // 🐺 wolf
+  '1f98a', // 🦊 fox
+  '1f43b', // 🐻 bear
+  '1f428', // 🐨 koala
+  '1f430', // 🐰 rabbit face
+  '1f439', // 🐹 hamster
+  '1f42d', // 🐭 mouse face
+  '1f438', // 🐸 frog
+  '1f435', // 🐵 monkey face
+  '1f43c', // 🐼 panda
+  '1f43e', // 🐾 paw prints
+  '1f41f', // 🐟 fish
+  '1f420', // 🐠 tropical fish
+  '1f421', // 🐡 blowfish
+  '1f433', // 🐳 spouting whale
+  '1f40b', // 🐋 whale
+  '1f42c', // 🐬 dolphin
+  '1f40c', // 🐌 snail
+  '1f41d', // 🐝 honeybee
+  '1f98b', // 🦋 butterfly
+  '1f41b', // 🐛 bug
+  '1f99c', // 🦜 parrot
+  '1f99a', // 🦚 peacock
+  '1f985', // 🦅 eagle
+  '1f427', // 🐧 penguin
+  '1f426'  // 🐦 bird
+];
+
+function simpleHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+const getAvatarUrl = (seed) => {
+  const idx = simpleHash(seed) % animalCodepoints.length;
+  const cp = animalCodepoints[idx];
+  return `https://twemoji.maxcdn.com/v/latest/72x72/${cp}.png`;
+};
+
 const Canvas = () => {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -11,6 +60,9 @@ const Canvas = () => {
   const [userCursors, setUserCursors] = useState({});
   const [currentStroke, setCurrentStroke] = useState(null);
   const [context, setContext] = useState(null);
+
+  const redrawRafIdRef = useRef(null);
+  const lastCursorSendMsRef = useRef(0);
 
   const currentUser = auth.currentUser;
   const userId = currentUser?.uid;
@@ -33,6 +85,32 @@ const Canvas = () => {
     setContext(ctx);
   }, []);
 
+  const scheduleRedraw = useCallback(() => {
+    if (!context) return;
+    if (redrawRafIdRef.current) {
+      cancelAnimationFrame(redrawRafIdRef.current);
+    }
+    redrawRafIdRef.current = requestAnimationFrame(() => {
+      if (!canvasRef.current || !context) return;
+      context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      // Iterate through all user strokes
+      Object.values(strokes).forEach(userStrokes => {
+        if (userStrokes && typeof userStrokes === 'object') {
+          Object.values(userStrokes).forEach(stroke => {
+            if (stroke.points && stroke.points.length > 0) {
+              context.beginPath();
+              context.moveTo(stroke.points[0].x, stroke.points[0].y);
+              stroke.points.forEach(point => {
+                context.lineTo(point.x, point.y);
+              });
+              context.stroke();
+            }
+          });
+        }
+      });
+    });
+  }, [context, strokes]);
+
   // Handle window resize
   useEffect(() => {
     const handleResize = () => {
@@ -40,28 +118,13 @@ const Canvas = () => {
       if (canvas && context) {
         canvas.width = window.innerWidth - 300;
         canvas.height = window.innerHeight - 100;
-        
-        // Redraw all strokes
-        Object.values(strokes).forEach(userStrokes => {
-          if (userStrokes && typeof userStrokes === 'object') {
-            Object.values(userStrokes).forEach(stroke => {
-              if (stroke.points && stroke.points.length > 0) {
-                context.beginPath();
-                context.moveTo(stroke.points[0].x, stroke.points[0].y);
-                stroke.points.forEach(point => {
-                  context.lineTo(point.x, point.y);
-                });
-                context.stroke();
-              }
-            });
-          }
-        });
+        scheduleRedraw();
       }
     };
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [context, strokes]);
+  }, [context, scheduleRedraw]);
 
   // Listen to strokes from Firebase
   useEffect(() => {
@@ -70,31 +133,20 @@ const Canvas = () => {
       const data = snapshot.val();
       if (data) {
         setStrokes(data);
-        
-        // Redraw canvas
-        if (context) {
-          context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-          // Iterate through all user strokes
-          Object.values(data).forEach(userStrokes => {
-            if (userStrokes && typeof userStrokes === 'object') {
-              Object.values(userStrokes).forEach(stroke => {
-                if (stroke.points && stroke.points.length > 0) {
-                  context.beginPath();
-                  context.moveTo(stroke.points[0].x, stroke.points[0].y);
-                  stroke.points.forEach(point => {
-                    context.lineTo(point.x, point.y);
-                  });
-                  context.stroke();
-                }
-              });
-            }
-          });
-        }
+      } else {
+        setStrokes({});
       }
     });
 
     return () => unsubscribe();
-  }, [context]);
+  }, []);
+
+  // Redraw when strokes or context change, batched via rAF
+  useEffect(() => {
+    if (context) {
+      scheduleRedraw();
+    }
+  }, [strokes, context, scheduleRedraw]);
 
   // Listen to online users
   useEffect(() => {
@@ -128,10 +180,14 @@ const Canvas = () => {
 
     const userRef = ref(database, `onlineUsers/${userId}`);
     const userCursorRef = ref(database, `cursors/${userId}`);
+
+    // Generate a new avatar seed per session/refresh
+    const sessionAvatarSeed = `${currentUser.email || userId}-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
     
     // Set user as online
     set(userRef, {
       email: currentUser.email,
+      avatarSeed: sessionAvatarSeed,
       timestamp: Date.now()
     });
 
@@ -165,7 +221,7 @@ const Canvas = () => {
     };
   }, [userId, currentUser.email]);
 
-  // Handle cursor movement
+  // Handle cursor movement (throttled DB updates)
   const handleMouseMove = useCallback((e) => {
     if (!userId) return;
 
@@ -174,22 +230,30 @@ const Canvas = () => {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Update cursor position in Firebase
-    const cursorRef = ref(database, `cursors/${userId}`);
-    set(cursorRef, {
-      x,
-      y,
-      email: currentUser.email,
-      timestamp: Date.now()
-    });
+    // Update cursor position in Firebase (throttle to ~30fps)
+    const now = Date.now();
+    if (now - lastCursorSendMsRef.current >= 33) {
+      lastCursorSendMsRef.current = now;
+      const cursorRef = ref(database, `cursors/${userId}`);
+      set(cursorRef, {
+        x,
+        y,
+        email: currentUser.email,
+        timestamp: now
+      });
+    }
 
     // Check if mouse button is pressed and we have a current stroke
     if (e.buttons === 1 && currentStroke && context) {
-      // If we weren't drawing but the mouse button is pressed, start drawing again
-      if (!isDrawing) {
-        setIsDrawing(true);
+      // Point sampling: skip very tiny moves
+      const lastPoint = currentStroke.points[currentStroke.points.length - 1];
+      const dx = x - lastPoint.x;
+      const dy = y - lastPoint.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 2) {
+        return;
       }
-      
+
       // Draw current stroke
       context.lineTo(x, y);
       context.stroke();
@@ -305,14 +369,14 @@ const Canvas = () => {
       <div className="main-content">
         <div className="canvas-wrapper">
                      <canvas
-             ref={canvasRef}
-             onMouseDown={handleMouseDown}
-             onMouseMove={handleMouseMove}
-             onMouseUp={handleMouseUp}
-             onMouseLeave={handleMouseLeave}
-             onMouseEnter={handleMouseEnter}
-             className="drawing-canvas"
-           />
+            ref={canvasRef}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+            onMouseEnter={handleMouseEnter}
+            className="drawing-canvas"
+          />
           
           {/* Render user cursors */}
           {Object.entries(userCursors).map(([uid, cursor]) => {
@@ -339,9 +403,21 @@ const Canvas = () => {
             <div className="users-list">
               {Object.entries(onlineUsers).map(([uid, user]) => (
                 <div key={uid} className="user-item">
-                  <div className="user-avatar">
-                    {user.email.charAt(0).toUpperCase()}
-                  </div>
+                  <img
+                    className="user-avatar-img"
+                    src={getAvatarUrl(user.avatarSeed || user.email || uid)}
+                    alt={user.email}
+                    width={32}
+                    height={32}
+                    loading="lazy"
+                    decoding="async"
+                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = getAvatarUrl(String(Math.random()));
+                    }}
+                  />
                   <span className="user-email">{user.email}</span>
                 </div>
               ))}
