@@ -69,14 +69,6 @@ npm start
 
 The app runs at `http://localhost:3000`.
 
-## Apple Sign‑in Notes
-
-Apple requires additional configuration in the Apple Developer portal.
-- In Firebase Console → Authentication → Sign-in method → Apple:
-  - Configure a Services ID, Team ID, Key ID, and private key.
-  - Add your redirect URLs per Firebase instructions.
-- Local development popups may be blocked if configuration is incomplete.
-
 ## How It Works
 
 ### Auth Flow
@@ -115,19 +107,3 @@ src/
 ├─ App.js / App.css             # App shell & loader
 ├─ index.js / index.css         # Entry & global styles
 ```
-
-## Deploy
-
-```bash
-npm run build
-```
-
-Host on Firebase (optional):
-1. `npm i -g firebase-tools`
-2. `firebase login`
-3. `firebase init hosting`
-4. `firebase deploy`
-
-## License
-
-MIT
