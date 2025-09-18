@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider, appleProvider } from '../firebase';
+import googleLogo from '../icons8-google-logo-48.png';
+import appleLogo from '../icons8-apple-logo-30.png';
 import './Login.css';
 
 const Login = ({ onLogin }) => {
@@ -29,11 +31,55 @@ const Login = ({ onLogin }) => {
     }
   };
 
+  const handleProviderLogin = async (provider) => {
+    setError('');
+    setLoading(true);
+    try {
+      await signInWithPopup(auth, provider);
+      onLogin();
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="login-container">
       <div className="login-card">
         <h1>Global Scribble Board</h1>
         <p>Draw together in real-time with people around the world</p>
+
+        <div className="oauth-buttons">
+          <button
+            type="button"
+            className="oauth-button google"
+            onClick={() => handleProviderLogin(googleProvider)}
+            disabled={loading}
+          >
+            <span className="icon" aria-hidden="true">
+              <img className="icon-img" src={googleLogo} alt="Google" />
+            </span>
+            <span className="label">Continue with Google</span>
+          </button>
+          <button
+            type="button"
+            className="oauth-button apple"
+            onClick={() => handleProviderLogin(appleProvider)}
+            disabled={loading}
+          >
+            <span className="icon" aria-hidden="true">
+              <img className="icon-img" src={appleLogo} alt="Apple" />
+            </span>
+            <span className="label">Continue with Apple</span>
+          </button>
+        </div>
+
+        <div className="divider">
+          <span className="line"></span>
+          <span className="text">or continue with email</span>
+          <span className="line"></span>
+        </div>
         
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
